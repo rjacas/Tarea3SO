@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/filesys.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -98,6 +100,22 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
+    /* Cada thread debe saber quien es su padre, para despertarlo en caso
+      de que lo este esperando */
+	  tid_t parent_id;
+
+	  /* Semaforo para quedarse esperando */
+	  struct semaphore waiting_for_child;
+	  
+	  /* Lista para los hijos */
+	  struct list children_list;
+
+	  /* Hijos sobre los que se esta esperando */
+	  struct list waited_children_list;
+
+	  /* executable file so it can allow deny writes when in existence */
+	  //struct file *exec_file;
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -137,5 +155,31 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void remove_from_exit_list (tid_t pid);
+int get_exit_status (tid_t pid);
+void put_on_exited_list (tid_t pid, int status);
+
+int wait_for_child_end (tid_t child_tid);
+
+/* Structs para las nuevas listas */
+struct child_elem
+{
+  tid_t pid;
+  struct list_elem elem;
+};
+  
+struct wait_child_elem
+{
+  tid_t pid;
+  struct list_elem elem;
+};
+
+struct exit_elem
+{
+  tid_t pid;
+  int status;
+  struct list_elem elem;
+};
 
 #endif /* threads/thread.h */

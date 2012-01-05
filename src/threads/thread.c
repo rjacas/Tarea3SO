@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -27,6 +28,15 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+/* Lock para acceder a all_list */
+static struct lock all_list_lock;
+
+/* Lista de threads que terminaron su ejecucion */
+static struct list exited_list;
+
+/* Lock para acceder a exited_list */
+static struct lock exited_list_lock;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -71,6 +81,8 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+static struct thread * thread_lookup (tid_t tid);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -90,8 +102,11 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init (&all_list_lock);
+  lock_init (&exited_list_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&exited_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -183,7 +198,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  t->parent_id = thread_current()->tid; 
+ 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -294,11 +310,20 @@ thread_exit (void)
   process_exit ();
 #endif
 
+  /* Antes de salir, hay que despertar al padre */
+  struct thread *parent = thread_lookup (thread_current()->parent_id);
+  if (parent)
+    sema_up (&parent->waiting_for_child);
+    
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+
+  lock_acquire (&all_list_lock);
   list_remove (&thread_current()->allelem);
+  lock_release (&all_list_lock);
+
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -470,6 +495,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+  
+  /* Inicializar nuevos campos */
+  list_init (&t->waited_children_list);
+  list_init (&t->children_list);
+  sema_init (&t->waiting_for_child, 0);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -585,3 +615,105 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* Nuevas funciones */
+int wait_for_child_end (tid_t child_tid)
+{
+  /* Hay que verificar que efectivamente sea un hijo */
+  int is_child;
+  struct child_elem *ce;
+  struct list_elem *e;
+  struct thread *t = thread_current();
+
+  is_child = 0;
+  for (e = list_begin (&t->children_list); e != list_end (&t->children_list);
+       e = list_next (e))
+  {
+    ce = list_entry (e, struct child_elem, elem);
+    if (child_tid == ce->pid) 
+    {
+      is_child = 1;
+      break;
+    }
+  }
+  /* is_child queda en 1 solo si es que el thread era efectivamente un hijo */
+      
+  if (!is_child)
+      return -1;
+
+  /* El hijo aun esta corriendo */
+  sema_down (&thread_current()->waiting_for_child);
+  return get_exit_status (child_tid);
+}
+
+void put_on_exited_list (tid_t pid, int status)
+{ 
+  struct exit_elem *e = (struct exit_elem*) malloc (sizeof(struct exit_elem));
+  ASSERT(e);
+  e->pid = pid;
+  e->status = status;
+  lock_acquire (&exited_list_lock);
+  list_push_back (&exited_list, &e->elem);
+  lock_release (&exited_list_lock);
+}
+
+void remove_from_exit_list(tid_t pid) 
+{
+  struct list_elem *e;
+  struct exit_elem *ee;
+  lock_acquire (&exited_list_lock);
+  for (e = list_begin (&exited_list); e != list_end (&exited_list);
+       e = list_next (e))
+  {
+    ee = list_entry (e, struct exit_elem, elem);
+    if (ee->pid == pid) 
+      {
+        list_remove(e);
+        free(ee);
+        break;
+      } 
+  }
+  lock_release(&exited_list_lock);
+}
+
+int get_exit_status (tid_t pid)
+{
+  int status = -1;
+  struct list_elem *e;
+  struct exit_elem *ee;
+  
+  lock_acquire (&exited_list_lock);
+  for (e = list_begin (&exited_list); e != list_end (&exited_list);
+       e = list_next (e))
+  {
+    ee = list_entry (e, struct exit_elem, elem);
+    if (ee->pid == pid) 
+      {
+        status = ee->status;
+        break;
+      } 
+  }
+  lock_release(&exited_list_lock);
+  
+  return status;
+}
+
+struct thread *thread_lookup (tid_t tid)
+{
+  struct thread *found = NULL, *t;
+  lock_acquire (&all_list_lock);
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+  {
+    t = list_entry (e, struct thread, allelem);
+    if (t->tid == tid) 
+    { 
+       found = t;
+       break;
+    }
+  }
+  lock_release (&all_list_lock);
+  return found;
+}

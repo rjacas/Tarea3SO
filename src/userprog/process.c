@@ -17,9 +17,91 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
+
+
+#define MAXARGS 30
+#define MAXARGLEN 128
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void push_arguments(void **esp, char *cmd_in);
+
+struct exec_args 
+{ 
+  bool status; 
+  char *file_name;
+  struct lock lock;
+  struct condition condition;
+};
+
+void push_arguments(void **esp, char *cmd_in) {
+  char *args[MAXARGS], /* Arreglo para guardar los argumentos */
+       *token,
+       *save_ptr;
+  void *dirs[MAXARGS]; /* Para las direcciones de los argumentos */
+  int ix, kx, 
+      zero, 
+      argc; /* Guarda el numero de argumentos */
+  
+  /* Inicializaciones */
+  ix = 0;
+  kx = 0;
+  zero = 0;
+  memset(args, 0, MAXARGS*sizeof(char *));
+  memset(dirs, 0, MAXARGS*sizeof(void *));
+
+
+	/* Poner los argumentos como string en el stack */
+	for (token = strtok_r(cmd_in, " ", &save_ptr); 
+	     token != NULL; 
+	     token = strtok_r(NULL, " ", &save_ptr)) 
+	{
+
+		args[kx] = token;
+		*esp -= strlen(token) + 1;
+		dirs[kx] = *esp;
+		memcpy(*esp, (void *) token, strlen(token) + 1);
+		kx ++;
+	}
+
+	/* word-align */
+	void *addr_aligned = (void *) ROUND_DOWN((uint32_t) * esp, 4);
+	int addr_diff = (int) (*esp) - (int) addr_aligned;
+
+	for (ix = 0; ix < addr_diff; ++ix) {
+		*esp -= 1;
+		memcpy(*esp, &zero, sizeof(uint8_t));
+	}
+
+	/* argv[ultimo] va nulo */
+	*esp -= sizeof(char *);
+	memcpy(*esp, &zero, sizeof(char *));
+
+	argc = kx;
+
+	/* Poner las direcciones en el stack, del ultimo del arreglo al primero */
+  ix = kx-1;
+  while (ix >= 0) {
+		*esp -= sizeof(char *);
+		memcpy(*esp, &dirs[ix], sizeof(char *));
+    ix--;
+	}
+
+	/* argv */
+	void *tmp = *esp;
+	*esp -= sizeof(char **);
+	memcpy(*esp, &tmp, sizeof(char **));
+
+	/* argc */
+	*esp -= sizeof(int);
+	memcpy(*esp, &argc, sizeof(int));
+
+	/* return address */
+	*esp -= sizeof(void *);
+	memcpy(*esp, &zero, sizeof(void *));
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -28,41 +110,99 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *real_name, *save_ptr;
+  int len;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
+  fn_copy = (char *)malloc((strlen(file_name)+1) * sizeof(char));
+  memset(fn_copy, 0, strlen(file_name)+1);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  
+  len = strlen(file_name);
+  real_name = (char *) malloc((len + 1) * sizeof(char));
+  memset(real_name, 0, len+1);
+  memcpy(real_name, file_name, len);
+  strtok_r (real_name, " ", &save_ptr);
+  
+  /* Creaun nuevo thread para la ejecucion y se queda esperando a que parta */
+  struct exec_args child_args;
+  child_args.status = false; 
+  child_args.file_name = fn_copy;
+  lock_init (&child_args.lock);
+  lock_acquire (&child_args.lock);
+  cond_init(&child_args.condition);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  tid = thread_create (real_name, PRI_DEFAULT, start_process, &child_args);
+  
+  cond_wait (&child_args.condition, &child_args.lock);
+  lock_release (&child_args.lock);
+  free(real_name); /* estaba */
+
+  if (child_args.status) 
+  {
+    struct thread *t = thread_current ();
+    struct child_elem *c_elem = (struct child_elem *) (malloc (sizeof(struct child_elem)));
+    c_elem->pid = tid;
+    list_push_back (&t->children_list, &c_elem->elem);
+  }
+ 
+  free(fn_copy);
+
+  if (!child_args.status) 
+    tid = TID_ERROR;
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *args)
 {
-  char *file_name = file_name_;
+  struct exec_args *eargs = (struct exec_args *)(args);;
+  char *file_name = eargs->file_name, /* Este incluye los argumentos */
+       *name_args, /* Nombre + args */
+       *real_name, /* Nombre real del programa (sin args) */
+       *save_ptr; /* Puntero para usar con strtok_r */
+  int len;
   struct intr_frame if_;
   bool success;
 
+  /* Copiar el nombre + args */
+  len = strlen(file_name);
+  name_args = (char *) malloc((len+1) * sizeof(char));
+  memset(name_args, 0, len+1);
+  memcpy(name_args, file_name, len);
+  
+  /* Recuperar el nombre real */
+  real_name = strtok_r(file_name, " ", &save_ptr);
+  
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (real_name, &if_.eip, &if_.esp);
+
+  if (success)
+  { /* Armar argumentos en pila */
+    push_arguments(&if_.esp, name_args);
+  }
+  
+  free(name_args);
+
+  /* Despertar al padre y setear status */
+  eargs->status = success;
+  lock_acquire (&eargs->lock);
+  cond_signal (&eargs->condition, &eargs->lock);
+  lock_release (&eargs->lock);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+
   if (!success) 
     thread_exit ();
 
@@ -88,7 +228,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  return wait_for_child_end (child_tid);
 }
 
 /* Free the current process's resources. */
@@ -307,13 +447,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
-
+  
   success = true;
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if (success == false) 
+    if (file) 
+      file_close (file);
   return success;
+
 }
 
 /* load() helpers. */

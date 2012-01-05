@@ -18,6 +18,16 @@ static void my_exec (struct intr_frame *f);
 static void my_wait (struct intr_frame *f);
 static void my_write (struct intr_frame *f);
 
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+static bool my_create(struct intr_frame *f);
+static bool my_remove(struct intr_frame *f);
+static int my_open(struct intr_frame *f);
+static int my_filesize(struct intr_frame *f);
+static void my_seek(struct intr_frame *f);
+static unsigned my_tell(struct intr_frame *f);
+static void my_close(struct intr_frame *f);
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
 /* Condiciones de acceso a mem de usuario */
 static bool dir_valida(void *ptr)
 {
@@ -58,8 +68,31 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  break;
 		case SYS_WRITE:
 		  my_write(f);
-		break;
-		  default:
+		  break;
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+		case SYS_CREATE:
+		  my_create(f);
+		  break;
+		case SYS_REMOVE:
+		  my_remove(f);
+		  break;
+		case SYS_OPEN:
+		  my_open(f);
+		  break;
+		case SYS_FILESIZE:
+		  my_filesize(f);
+		  break;
+		case SYS_SEEK:
+		  my_seek(f);
+		  break;
+		case SYS_TELL:
+		  my_tell(f);
+		  break;
+		case SYS_CLOSE:
+		  my_close(f);
+		  break;
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/		
+		default:
 		  printf("AUN NO IMPLEMENTADO\n");
 		  thread_exit ();
 		  break;
@@ -238,3 +271,36 @@ static void my_write (struct intr_frame *f){
   /* Retorna numero de bytes escritos */
   f->eax = length; 
 }
+
+
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+static bool my_create(struct intr_frame *f){
+  return true;
+}
+
+static bool my_remove(struct intr_frame *f){
+  return  true;
+}
+
+static int my_open(struct intr_frame *f){
+  return 0;
+}
+
+static int my_filesize(struct intr_frame *f){
+  return 0;
+}
+
+static void my_seek(struct intr_frame *f){
+
+}
+
+static unsigned my_tell(struct intr_frame *f){
+  return 0;
+}
+
+static void my_close(struct intr_frame *f){
+
+}
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+

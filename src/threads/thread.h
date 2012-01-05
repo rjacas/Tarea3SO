@@ -182,4 +182,13 @@ struct exit_elem
   struct list_elem elem;
 };
 
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+struct my_fd
+{
+  int value;
+  struct file *f;
+  struct list_elem elem;  
+};
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
 #endif /* threads/thread.h */

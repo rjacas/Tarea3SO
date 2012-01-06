@@ -275,7 +275,22 @@ static void my_write (struct intr_frame *f){
 
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 static bool my_create(struct intr_frame *f){
-  return true;
+
+  if (!dir_valida (f->esp + 1 * sizeof (char *)) ||
+      !dir_valida (f->esp + 2 * sizeof (int)))
+    {
+      syscall_simple_exit (f, -1);
+      return false;
+    }
+
+  char *fi = (char *) (f->esp + 1 * sizeof (char *));
+  unsigned initial_size = *(int *) (f->esp + 2 * sizeof (int));
+
+  if (!fi){
+    syscall_simple_exit(f,-1);
+    return false;
+  }
+  return filesys_create (fi, initial_size);
 }
 
 static bool my_remove(struct intr_frame *f){

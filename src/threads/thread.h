@@ -112,6 +112,9 @@ struct thread
 
 	  /* Hijos sobre los que se esta esperando */
 	  struct list waited_children_list;
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+    struct list fd_list;
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 	  /* executable file so it can allow deny writes when in existence */
 	  //struct file *exec_file;
@@ -187,7 +190,8 @@ struct my_fd
 {
   int value;
   struct file *f;
-  struct list_elem elem;  
+  struct list_elem elem;
+  struct list_elem thread_elem;  
 };
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 

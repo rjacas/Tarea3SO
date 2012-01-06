@@ -29,8 +29,9 @@ static void my_filesize(struct intr_frame *f);
 static void my_seek(struct intr_frame *f);
 static void my_tell(struct intr_frame *f);
 static void my_close(struct intr_frame *f);
-
+static int get_fd();
 struct list fd_list;
+int cur_fd;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 /* Condiciones de acceso a mem de usuario */
@@ -310,8 +311,7 @@ static void my_create(struct intr_frame *f){
 
 static void my_remove(struct intr_frame *f){
 
-  if (!dir_valida (f->esp + 4 * sizeof (void *)) ||
-      !dir_valida (f->esp + 5 * sizeof (int)))
+  if (!dir_valida (f->esp + 4 * sizeof (void *)))
     {
       syscall_simple_exit (f, -1);
       f->eax = false;
@@ -320,9 +320,8 @@ static void my_remove(struct intr_frame *f){
   //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
 
   char *fi = *(void **) (f->esp + 4 * sizeof (void *));
-  unsigned initial_size = *(int *) (f->esp + 5 * sizeof (int));
 
-  //printf("removing %s with size %d\n",(char*)fi,initial_size);
+  //printf("removing %s\n",(char*)fi);
 
   if (!fi || *fi == '\0'){
     f->eax = false;
@@ -337,7 +336,42 @@ static void my_remove(struct intr_frame *f){
 }
 
 static void my_open(struct intr_frame *f){
-  return 0;
+  struct file *fil;
+  struct my_fd *fd;
+
+  if (!dir_valida (f->esp + 4 * sizeof (void *)))
+    {
+      syscall_simple_exit (f, -1);
+      f->eax = false;
+    }
+
+  //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
+
+  char *fi = *(void **) (f->esp + 4 * sizeof (void *));
+
+  //printf("removing %s\n",(char*)fi);
+  
+  f->eax = -1;
+  if (!fi)
+    return;
+  if (!is_user_vaddr (fi))
+    syscall_simple_exit (f, -1);
+  fil = filesys_open (fi);
+  if (!fil)
+    return;
+    
+  fd = (struct my_fd *)malloc (sizeof (struct my_fd));
+  if (!fd) /* no queda memoria */
+    {
+      file_close (fil);
+      return;
+    }
+    
+  fd->f = fil;
+  fd->value = get_fd();
+  list_push_back (&fd_list, &fd->elem);
+  list_push_back (&thread_current ()->fd_list, &fd->thread_elem);
+  f->eax = fd->value;
 }
 
 static void my_filesize(struct intr_frame *f){
@@ -355,6 +389,12 @@ static void my_tell(struct intr_frame *f){
 static void my_close(struct intr_frame *f){
 
 }
+
+static int get_fd(){
+  if(cur_fd == NULL)
+    cur_fd = 2;
+  return ++cur_fd;
+} 
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 

@@ -276,17 +276,19 @@ static void my_write (struct intr_frame *f){
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 static bool my_create(struct intr_frame *f){
 
-  if (!dir_valida (f->esp + 1 * sizeof (char *)) ||
-      !dir_valida (f->esp + 2 * sizeof (int)))
+  if (!dir_valida (f->esp + 2 * sizeof (void *)) ||
+      !dir_valida (f->esp + 3 * sizeof (int)))
     {
       syscall_simple_exit (f, -1);
       return false;
     }
 
-  char *fi = (char *) (f->esp + 1 * sizeof (char *));
-  unsigned initial_size = *(int *) (f->esp + 2 * sizeof (int));
+  //~ hex_dump((unsigned int)f->esp, f->esp, 300, 1);
 
-  if (!fi){
+  char *fi = *(void **) (f->esp + 2 * sizeof (void *));
+  unsigned initial_size = *(int *) (f->esp + 3 * sizeof (int));
+
+  if (!fi || fi == NULL || *fi == 0 || strlen(fi)==0 || !strcmp(fi,"")){
     syscall_simple_exit(f,-1);
     return false;
   }

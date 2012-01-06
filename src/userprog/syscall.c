@@ -309,7 +309,31 @@ static void my_create(struct intr_frame *f){
 }
 
 static void my_remove(struct intr_frame *f){
-  return  true;
+
+  if (!dir_valida (f->esp + 4 * sizeof (void *)) ||
+      !dir_valida (f->esp + 5 * sizeof (int)))
+    {
+      syscall_simple_exit (f, -1);
+      f->eax = false;
+    }
+
+  //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
+
+  char *fi = *(void **) (f->esp + 4 * sizeof (void *));
+  unsigned initial_size = *(int *) (f->esp + 5 * sizeof (int));
+
+  //printf("removing %s with size %d\n",(char*)fi,initial_size);
+
+  if (!fi || *fi == '\0'){
+    f->eax = false;
+  }
+  if(strlen((char*)fi) > 14){
+    f->eax = false;
+  }
+  if (!is_user_vaddr (fi))
+    syscall_simple_exit(f,-1);
+
+  f->eax = filesys_remove ((char*)fi);
 }
 
 static void my_open(struct intr_frame *f){

@@ -294,6 +294,9 @@ static bool my_create(struct intr_frame *f){
     syscall_simple_exit(f,-1);
     return false;
   }
+  if(strlen((char*)fi) >= 511){
+    return false;
+  }
   return filesys_create ((char*)fi, initial_size);
 }
 

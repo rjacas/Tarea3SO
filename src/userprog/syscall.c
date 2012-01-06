@@ -8,7 +8,10 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "threads/malloc.h"
-
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+#include <stdbool.h>
+#include <string.h>
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 static void syscall_handler(struct intr_frame *);
 
@@ -19,12 +22,12 @@ static void my_wait (struct intr_frame *f);
 static void my_write (struct intr_frame *f);
 
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-static bool my_create(struct intr_frame *f);
-static bool my_remove(struct intr_frame *f);
-static int my_open(struct intr_frame *f);
-static int my_filesize(struct intr_frame *f);
+static void my_create(struct intr_frame *f);
+static void my_remove(struct intr_frame *f);
+static void my_open(struct intr_frame *f);
+static void my_filesize(struct intr_frame *f);
 static void my_seek(struct intr_frame *f);
-static unsigned my_tell(struct intr_frame *f);
+static void my_tell(struct intr_frame *f);
 static void my_close(struct intr_frame *f);
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
@@ -274,13 +277,13 @@ static void my_write (struct intr_frame *f){
 
 
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-static bool my_create(struct intr_frame *f){
+static void my_create(struct intr_frame *f){
 
   if (!dir_valida (f->esp + 4 * sizeof (void *)) ||
       !dir_valida (f->esp + 5 * sizeof (int)))
     {
       syscall_simple_exit (f, -1);
-      return false;
+      f->eax = false;
     }
 
   //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
@@ -292,23 +295,23 @@ static bool my_create(struct intr_frame *f){
 
   if (!fi || *fi == '\0'){
     syscall_simple_exit(f,-1);
-    return false;
+    f->eax = false;
   }
-  if(strlen((char*)fi) >= 511){
-    return false;
+  if(strlen((char*)fi) > 14){
+    f->eax = false;
   }
-  return filesys_create ((char*)fi, initial_size);
+  f->eax = filesys_create ((char*)fi, initial_size);
 }
 
-static bool my_remove(struct intr_frame *f){
+static void my_remove(struct intr_frame *f){
   return  true;
 }
 
-static int my_open(struct intr_frame *f){
+static void my_open(struct intr_frame *f){
   return 0;
 }
 
-static int my_filesize(struct intr_frame *f){
+static void my_filesize(struct intr_frame *f){
   return 0;
 }
 
@@ -316,7 +319,7 @@ static void my_seek(struct intr_frame *f){
 
 }
 
-static unsigned my_tell(struct intr_frame *f){
+static void my_tell(struct intr_frame *f){
   return 0;
 }
 

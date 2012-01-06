@@ -276,8 +276,8 @@ static void my_write (struct intr_frame *f){
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 static bool my_create(struct intr_frame *f){
 
-  if (!dir_valida (f->esp + 2 * sizeof (void *)) ||
-      !dir_valida (f->esp + 3 * sizeof (int)))
+  if (!dir_valida (f->esp + 4 * sizeof (void *)) ||
+      !dir_valida (f->esp + 5 * sizeof (int)))
     {
       syscall_simple_exit (f, -1);
       return false;
@@ -285,10 +285,12 @@ static bool my_create(struct intr_frame *f){
 
   //~ hex_dump((unsigned int)f->esp, f->esp, 300, 1);
 
-  char *fi = *(void **) (f->esp + 2 * sizeof (void *));
-  unsigned initial_size = *(int *) (f->esp + 3 * sizeof (int));
+  char *fi = *(void **) (f->esp + 4 * sizeof (void *));
+  unsigned initial_size = *(int *) (f->esp + 5 * sizeof (int));
 
-  if (!fi || fi == NULL || *fi == 0 || strlen(fi)==0 || !strcmp(fi,"")){
+  printf("creating %s mu\n",fi);
+
+  if (!fi || strcmp(fi,"")){
     syscall_simple_exit(f,-1);
     return false;
   }

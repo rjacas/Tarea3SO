@@ -283,18 +283,18 @@ static bool my_create(struct intr_frame *f){
       return false;
     }
 
-  //~ hex_dump((unsigned int)f->esp, f->esp, 300, 1);
+  //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
 
   char *fi = *(void **) (f->esp + 4 * sizeof (void *));
   unsigned initial_size = *(int *) (f->esp + 5 * sizeof (int));
 
-  printf("creating %s mu\n",fi);
+  //printf("creating %s with size %d\n",(char*)fi,initial_size);
 
-  if (!fi || strcmp(fi,"")){
+  if (!fi || *fi == '\0'){
     syscall_simple_exit(f,-1);
     return false;
   }
-  return filesys_create (fi, initial_size);
+  return filesys_create ((char*)fi, initial_size);
 }
 
 static bool my_remove(struct intr_frame *f){

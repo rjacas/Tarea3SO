@@ -339,7 +339,7 @@ static void my_open(struct intr_frame *f){
   struct file *fil;
   struct my_fd *fd;
 
-  if (!dir_valida (f->esp + 4 * sizeof (void *)))
+  if (!dir_valida (f->esp + 1 * sizeof (void *)))
     {
       syscall_simple_exit (f, -1);
       f->eax = false;
@@ -347,9 +347,9 @@ static void my_open(struct intr_frame *f){
 
   //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
 
-  char *fi = *(void **) (f->esp + 4 * sizeof (void *));
+  char *fi = *(void **) (f->esp + 1 * sizeof (void *));
 
-  //printf("opening %s\n",(char*)fi); 
+  //~ printf("opening %s\n",(char*)fi); 
   
   f->eax = -1;
   if (!fi)

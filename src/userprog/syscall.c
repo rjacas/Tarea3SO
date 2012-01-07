@@ -349,13 +349,11 @@ static void my_open(struct intr_frame *f){
 
   char *fi = *(void **) (f->esp + 4 * sizeof (void *));
 
-  //printf("removing %s\n",(char*)fi);
+  //printf("opening %s\n",(char*)fi); 
   
   f->eax = -1;
   if (!fi)
     return;
-  if (!is_user_vaddr (fi))
-    syscall_simple_exit (f, -1);
   fil = filesys_open (fi);
   if (!fil)
     return;

@@ -30,6 +30,8 @@ static void my_seek(struct intr_frame *f);
 static void my_tell(struct intr_frame *f);
 static void my_close(struct intr_frame *f);
 static int get_fd();
+static struct file *find_file_by_fd (int fd);
+static struct my_fd *find_fd_elem_by_fd (int fd);
 struct list fd_list;
 int cur_fd;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -251,6 +253,7 @@ static void my_wait (struct intr_frame *f UNUSED){
 	return;
 }
 static void my_write (struct intr_frame *f){
+  struct file *fl;
 
 	// se verifica que todos los argumentos apunten a direcciones validas
   if (!dir_valida (f->esp + 5*sizeof (int)) ||
@@ -269,16 +272,36 @@ static void my_write (struct intr_frame *f){
                               sizeof (void *));
 
 
-  if (fd == 1){
-    putbuf(buffer, length);
-  }
-  else { /* Cualquier otro fd no esta implementado aun */
-    syscall_simple_exit (f, -1);
+  if(fd == 0){
+	syscall_simple_exit (f, -1);
     return;
   }
+
+  if (fd == 1){
+    putbuf(buffer, length);
+    /* Retorna numero de bytes escritos */
+    f->eax = length;
+  }
+  else {
+	f->eax = -1;
+	
+	fl = find_file_by_fd(fd);
+	
+	if (!fl){
+	  syscall_simple_exit (f, -1);
+	  return;
+	}
+	
+	/*if(fl->deny_write == true){
+	  syscall_simple_exit (f, -1);
+	  return;
+	}*/
+	
+	unsigned offset = file_write (fl, buffer, length);     
+    f->eax = offset; 
+  }
   
-  /* Retorna numero de bytes escritos */
-  f->eax = length; 
+   
 }
 
 
@@ -373,7 +396,31 @@ static void my_open(struct intr_frame *f){
 }
 
 static void my_filesize(struct intr_frame *f){
-  return 0;
+	
+  struct file *fl;
+  
+  if (!dir_valida (f->esp + 1 * sizeof (int)))
+    {
+      syscall_simple_exit (f, -1);
+      f->eax = false;
+    }
+
+  //hex_dump((unsigned int)f->esp, f->esp, 300, 1);
+
+  int fd = *(int *) (f->esp + 1 * sizeof (int));
+
+  //~ printf("filelength %s\n",fd); 
+  
+  f->eax = -1;
+  if(fd < 2)
+	return;
+	
+  fl = find_file_by_fd (fd);
+  if (!f)
+    return;
+
+  f->eax = file_length (fl);
+	
 }
 
 static void my_seek(struct intr_frame *f){
@@ -393,6 +440,35 @@ static int get_fd(){
     cur_fd = 2;
   return ++cur_fd;
 } 
+
+static struct file *
+find_file_by_fd (int fd)
+{
+  struct my_fd *ret;
+  
+  ret = find_fd_elem_by_fd (fd);
+  if (!ret)
+    return NULL;
+  return ret->f;
+}
+
+static struct my_fd *
+find_fd_elem_by_fd (int fd)
+{
+  struct my_fd *ret;
+  struct list_elem *l;
+  
+  for (l = list_begin (&fd_list); l != list_end (&fd_list); l = list_next (l))
+    {
+      ret = list_entry (l, struct my_fd, elem);
+      if (ret->value == fd)
+        return ret;
+    }
+    
+  return NULL;
+}
+
+
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 

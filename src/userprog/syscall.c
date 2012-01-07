@@ -9,8 +9,11 @@
 #include "userprog/process.h"
 #include "threads/malloc.h"
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 #include <stdbool.h>
 #include <string.h>
+#include <list.h>
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
 static void syscall_handler(struct intr_frame *);
@@ -32,6 +35,7 @@ static void my_close(struct intr_frame *f);
 static int get_fd();
 static struct file *find_file_by_fd (int fd);
 static struct my_fd *find_fd_elem_by_fd (int fd);
+static struct fd_elem *find_fd_elem_by_fd_in_process (int fd);
 struct list fd_list;
 int cur_fd;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -424,15 +428,103 @@ static void my_filesize(struct intr_frame *f){
 }
 
 static void my_seek(struct intr_frame *f){
+	
+  struct file *fl;
+
+	// se verifica que todos los argumentos apunten a direcciones validas
+  if (!dir_valida (f->esp + 5*sizeof (int)) ||
+      !dir_valida (f->esp + 6 * sizeof (int)))
+    {
+      syscall_simple_exit (f, -1);
+      return;
+    }
+//printf("Veamos como viene el stack...\n");
+//hex_dump((unsigned int)f->esp, f->esp, 100, 1);
+
+  int fd = *(int *) (f->esp + 5*sizeof (int));
+  unsigned new_pos = *(int *) (f->esp + 6 * sizeof (int));
+
+
+  if(fd < 2){
+	syscall_simple_exit (f, -1);
+    return;
+  }
+
+	
+  fl = find_file_by_fd(fd);
+	
+  if (!fl){
+    syscall_simple_exit (f, -1);
+	return;
+  }
+		
+  file_seek (fl, new_pos);
 
 }
 
 static void my_tell(struct intr_frame *f){
-  return 0;
+  struct file *fl;
+
+  // se verifica que todos los argumentos apunten a direcciones validas
+  if (!dir_valida (f->esp + 5*sizeof (int)))
+    {
+      syscall_simple_exit (f, -1);
+      return;
+    }
+//printf("Veamos como viene el stack...\n");
+//hex_dump((unsigned int)f->esp, f->esp, 100, 1);
+
+  int fd = *(int *) (f->esp + 5*sizeof (int));
+  
+  if(fd < 2){
+	syscall_simple_exit (f, -1);
+    return;
+  }
+
+	
+  fl = find_file_by_fd(fd);
+	
+  if (!fl){
+    syscall_simple_exit (f, -1);
+	return;
+  }
+	
+  file_tell (fl);
 }
 
 static void my_close(struct intr_frame *f){
+  struct my_fd *myfd;
 
+  // se verifica que todos los argumentos apunten a direcciones validas
+  if (!dir_valida (f->esp + 3*sizeof (int)))
+    {
+      syscall_simple_exit (f, -1);
+      return;
+    }
+  
+//hex_dump((unsigned int)f->esp, f->esp, 100, 1);
+
+  int fd = *(int *) (f->esp + 3*sizeof (int));
+  
+  //printf("closing fd %d\n",fd);
+  
+  if(fd < 2){
+	syscall_simple_exit (f, -1);
+    return;
+  }
+
+	
+  myfd = find_fd_elem_by_fd_in_process (fd);
+  
+  if (!myfd){
+    syscall_simple_exit (f, -1);
+    return;
+  }
+  
+  file_close (myfd->f);
+  list_remove (&myfd->elem);
+  list_remove (&myfd->thread_elem);
+  free (myfd);
 }
 
 static int get_fd(){
@@ -461,6 +553,25 @@ find_fd_elem_by_fd (int fd)
   for (l = list_begin (&fd_list); l != list_end (&fd_list); l = list_next (l))
     {
       ret = list_entry (l, struct my_fd, elem);
+      if (ret->value == fd)
+        return ret;
+    }
+    
+  return NULL;
+}
+
+static struct fd_elem *
+find_fd_elem_by_fd_in_process (int fd)
+{
+  struct my_fd *ret;
+  struct list_elem *l;
+  struct thread *t;
+  
+  t = thread_current ();
+  
+  for (l = list_begin (&t->fd_list); l != list_end (&t->fd_list); l = list_next (l))
+    {
+      ret = list_entry (l, struct my_fd, thread_elem);
       if (ret->value == fd)
         return ret;
     }

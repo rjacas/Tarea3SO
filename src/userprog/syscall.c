@@ -32,6 +32,7 @@ static void my_filesize(struct intr_frame *f);
 static void my_seek(struct intr_frame *f);
 static void my_tell(struct intr_frame *f);
 static void my_close(struct intr_frame *f);
+static void my_read(struct intr_frame *f); 
 static int get_fd();
 static struct file *find_file_by_fd (int fd);
 static struct my_fd *find_fd_elem_by_fd (int fd);
@@ -106,6 +107,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 		case SYS_CLOSE:
 		  my_close(f);
 		  break;
+    case SYS_READ:
+      my_read(f);
+      break;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/		
 		default:
 		  printf("AUN NO IMPLEMENTADO\n");
@@ -529,6 +533,48 @@ static void my_close(struct intr_frame *f){
   list_remove (&myfd->elem);
   list_remove (&myfd->thread_elem);
   free (myfd);
+}
+
+static void my_read(struct intr_frame *f){
+  struct file *fl;
+  int i;
+
+  if (!dir_valida (f->esp + 5 * sizeof (int)) ||
+      !dir_valida (f->esp + 6 * sizeof (int)) ||
+      !dir_valida (f->esp + 6 * sizeof (int) + sizeof (void *)))
+    {
+      syscall_simple_exit (f, -1);
+      return;
+    }
+
+  int fd = *(int *) (f->esp + 5 * sizeof (int));
+  const void *buffer = *(void **) (f->esp + 6 * sizeof (int));
+  unsigned length = *(int *) (f->esp + 6 * sizeof (int) +
+                              sizeof (void *));
+  
+  if(fd == 1){
+	syscall_simple_exit (f, -1);
+    return;
+  }
+  if (fd == 0){
+    for (i = 0; i != length; ++i)
+      *(uint8_t *)(buffer + i) = input_getc ();
+    f->eax = length;
+  }
+  else {
+
+	f->eax = -1;
+	fl = find_file_by_fd(fd);
+
+	if (!fl){
+	  syscall_simple_exit (f, -1);
+	  return;
+	}
+
+	unsigned offset = file_read(fl,(void *) buffer, length);     
+    f->eax = offset;  
+  }
+
 }
 
 static int get_fd(){

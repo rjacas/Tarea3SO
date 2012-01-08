@@ -275,18 +275,21 @@ static void my_write (struct intr_frame *f){
   unsigned length = *(int *) (f->esp + 6 * sizeof (int) +
                               sizeof (void *));
 
-
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
   if(fd == 0){
 	syscall_simple_exit (f, -1);
     return;
   }
-
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
   if (fd == 1){
     putbuf(buffer, length);
     /* Retorna numero de bytes escritos */
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
     f->eax = length;
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
   }
   else {
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 	f->eax = -1;
 	
 	fl = find_file_by_fd(fd);
@@ -303,6 +306,7 @@ static void my_write (struct intr_frame *f){
 	
 	unsigned offset = file_write (fl, buffer, length);     
     f->eax = offset; 
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/    
   }
   
    

@@ -571,6 +571,11 @@ static void my_read(struct intr_frame *f){
 	  return;
 	}
 
+  if(!dir_valida(buffer)){
+    syscall_simple_exit (f, -1);
+    return;
+  }    
+
 	unsigned offset = file_read(fl,(void *) buffer, length);     
     f->eax = offset;  
   }

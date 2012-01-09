@@ -278,7 +278,6 @@ static void my_write (struct intr_frame *f){
   const void *buffer = *(void **) (f->esp + 6 * sizeof (int));
   unsigned length = *(int *) (f->esp + 6 * sizeof (int) +
                               sizeof (void *));
-
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
   if(fd == 0){
 	syscall_simple_exit (f, -1);
@@ -443,8 +442,8 @@ static void my_seek(struct intr_frame *f){
   struct file *fl;
 
 	// se verifica que todos los argumentos apunten a direcciones validas
-  if (!dir_valida (f->esp + 5*sizeof (int)) ||
-      !dir_valida (f->esp + 6 * sizeof (int)))
+  if (!dir_valida (f->esp + 4 * sizeof (int)) ||
+      !dir_valida (f->esp + 5 * sizeof (int)))
     {
       syscall_simple_exit (f, -1);
       return;
@@ -452,8 +451,8 @@ static void my_seek(struct intr_frame *f){
 //printf("Veamos como viene el stack...\n");
 //hex_dump((unsigned int)f->esp, f->esp, 100, 1);
 
-  int fd = *(int *) (f->esp + 5*sizeof (int));
-  unsigned new_pos = *(int *) (f->esp + 6 * sizeof (int));
+  int fd = *(int *) (f->esp + 4 * sizeof (int));
+  unsigned new_pos = *(int *) (f->esp + 5 * sizeof (int));
 
 
   if(fd < 2){

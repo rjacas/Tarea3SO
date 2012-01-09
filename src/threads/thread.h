@@ -165,6 +165,10 @@ void put_on_exited_list (tid_t pid, int status);
 
 int wait_for_child_end (tid_t child_tid);
 
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+struct thread *get_thread_by_tid (tid_t tid);
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
 /* Structs para las nuevas listas */
 struct child_elem
 {

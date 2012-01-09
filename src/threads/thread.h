@@ -189,6 +189,7 @@ struct exit_elem
 struct my_fd
 {
   int value;
+  char name[16];
   struct file *f;
   struct list_elem elem;
   struct list_elem thread_elem;  

@@ -297,16 +297,18 @@ static void my_write (struct intr_frame *f){
 	f->eax = -1;
 	
 	fl = find_file_by_fd(fd);
+	struct my_fd *myfd = find_fd_elem_by_fd(fd);
 	
 	if (!fl){
 	  syscall_simple_exit (f, -1);
 	  return;
 	}
-	
-	/*if(fl->deny_write == true){
-	  syscall_simple_exit (f, -1);
+    //~ printf("name %s\n",thread_current()->name);
+    //~ printf("name2 %s\n",myfd->name);
+	if(strcmp(thread_current()->name,myfd->name)==0){
+	  f->eax = 0;
 	  return;
-	}*/
+	}
 	
 	unsigned offset = file_write (fl, buffer, length);     
     f->eax = offset; 
@@ -402,6 +404,7 @@ static void my_open(struct intr_frame *f){
     
   fd->f = fil;
   fd->value = get_fd();
+  strlcpy (fd->name, fi,14);
   list_push_back (&fd_list, &fd->elem);
   list_push_back (&thread_current ()->fd_list, &fd->thread_elem);
   f->eax = fd->value;

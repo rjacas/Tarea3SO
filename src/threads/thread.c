@@ -14,6 +14,7 @@
 #include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -307,7 +308,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  process_exit ();  
 #endif
 
   /* Antes de salir, hay que despertar al padre */
@@ -319,6 +320,24 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+  
+#ifdef USERPROG
+  struct list_elem *l;
+  struct thread *cur;
+  struct my_fd *myfd;
+  
+  cur = thread_current ();
+
+  for (l = list_begin (&cur->fd_list); l != list_end (&cur->fd_list);)
+    {
+      myfd = list_entry (l, struct my_fd, thread_elem);
+      l = list_next (l);
+	  file_close (myfd->f);
+	  list_remove (&myfd->elem);
+	  list_remove (&myfd->thread_elem);
+	  free (myfd);
+    }
+#endif
 
   lock_acquire (&all_list_lock);
   list_remove (&thread_current()->allelem);

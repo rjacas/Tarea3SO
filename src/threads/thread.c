@@ -321,6 +321,7 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 #ifdef USERPROG
   struct list_elem *l;
   struct thread *cur;
@@ -338,6 +339,7 @@ thread_exit (void)
 	  free (myfd);
     }
 #endif
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
   lock_acquire (&all_list_lock);
   list_remove (&thread_current()->allelem);
